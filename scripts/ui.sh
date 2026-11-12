@@ -49,7 +49,7 @@ EOF
 
 show_hello() {
   cat <<EOF
-======= Repo-Tools Launcher / v$LAUNCHER_VERSION
+========= cuberbug-walls: Tools Launcher / v$LAUNCHER_VERSION
 EOF
 }
 

@@ -44,19 +44,25 @@ set -o nounset
 set -o pipefail
 
 
-# === Определение путей и подключение библиотек ===
+# =============================
+# Определение путей и подключение библиотек
+# =============================
 
 REPO_TOOLS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC_DIR="$REPO_TOOLS_ROOT/scripts"
+readonly REPO_TOOLS_ROOT
+readonly SRC_DIR="$REPO_TOOLS_ROOT/scripts"
+
 # shellcheck source=scripts/ui.sh
-source "${SRC_DIR}/ui.sh" || { echo "Ошибка: не найден ui.sh" >&2; exit 1; }
+source "${SRC_DIR}/ui.sh" || { printf 'Ошибка: не найден ui.sh' >&2; exit 1; }
 # shellcheck source=scripts/env.sh
-source "${SRC_DIR}/env.sh" || { echo "Ошибка: не найден env.sh" >&2; exit 1; }
+source "${SRC_DIR}/env.sh" || { printf 'Ошибка: не найден env.sh' >&2; exit 1; }
 # shellcheck source=scripts/utils.sh
-source "${SRC_DIR}/utils.sh" || { echo "Ошибка: не найден utils.sh" >&2; exit 1; }
+source "${SRC_DIR}/utils.sh" || { printf 'Ошибка: не найден utils.sh' >&2; exit 1; }
 
 
-# === Основная логика ===
+# =============================
+# Основная логика
+# =============================
 
 main() {
   local venv_python
@@ -67,6 +73,10 @@ main() {
 
   init_env
 
+  # Сейчас, при отсутствии установленного виртуального окружения и отказе от его создания,
+  # код выполняется дальше и пользователь получает запрос на запуск меню.
+  # Следует доработать логику и строго запретить запуск меню вне установленного
+  # виртуального окружения.
   setup_venv \
     --venv-dir "$VENV_DIR" \
     --python "$VENV_PYTHON_FILE" \
@@ -75,30 +85,32 @@ main() {
 
   venv_python="$(choose_python "$VENV_PYTHON_FILE")"
 
-  if confirm "Запустить главное меню"; then
-    e_info "Запуск меню..."
+  if confirm 'Запустить главное меню'; then
+    p_info 'Запуск меню...'
 
     # Переход важен для корректной работы относительных путей внутри python-скриптов
     cd "$REPO_TOOLS_ROOT"
 
     "$venv_python" -m "$MENU_APP"
   else
-    e_stop "$(f_yellow "Запуск меню отменён.")"
+    p_stop "$(f_yellow 'Запуск меню отменён.')"
     return 0
   fi
 }
 
 
-# === Безопасный запуск ===
+# =============================
+# Безопасный запуск
+# =============================
 
 parse_args "$@"
 
 if main; then
   exit 0
 else
-  e_error "$(e_bold "В процессе инициализации произошла ошибка.")"
-  e_error "Пожалуйста, просмотрите вывод выше, чтобы понять причину."
-  e_error "Окно не будет закрыто автоматически, чтобы вы могли изучить лог."
-  read -r -p "Нажмите Enter для выхода..."
+  p_error "$(f_bold "В процессе инициализации произошла ошибка.")"
+  p_error 'Пожалуйста, просмотрите вывод выше, чтобы понять причину.'
+  p_error 'Окно не будет закрыто автоматически, чтобы вы могли изучить лог.'
+  read -r -p 'Нажмите Enter для выхода...'
   exit 1
 fi

@@ -3,28 +3,32 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-VERSION="1.0.0"
+readonly LAUNCHER_VERSION="1.0.1"
+
+BOLD='' NO_BOLD=''
+RED='' GREEN='' YELLOW='' BLUE=''
+CANCEL_COLOR=''
 
 
-# ==============================================================================
+# =============================
 # Многострочный вывод текста в терминал
-# ------------------------------------------------------------------------------
+# -----------------------------
 # Содержит функции с выводом:
 #   - справочной информации о скрипте
 #   - приветственного сообщения в начале работы
-# ==============================================================================
+# =============================
 
 show_help() {
   cat <<EOF
 Repo-Tools Launcher — менеджер подготовки виртуального окружения для Python-утилит.
-Версия: $VERSION
+Версия: $LAUNCHER_VERSION
 
 Описание:
   Скрипт проверяет и обновляет виртуальное окружение Python, установив все зависимости.
   Внутри этого окружения будет запущено интерактивное TUI меню для управления запуском утилит.
 
 Использование:
-  $(basename "$0") [опции]
+  ${0##*/} [опции]
 
 Опции:
   -d, --debug         Запуск в режиме отладки (вывод подробных логов)
@@ -34,10 +38,10 @@ Repo-Tools Launcher — менеджер подготовки виртуальн
   -v, --version       Показать версию скрипта
 
 Примеры:
-  ./$(basename "$0")
+  ./${0##*/}
       Стандартный запуск
 
-  ./$(basename "$0") --debug
+  ./${0##*/} --debug
       Запуск в режиме отладки с выводом дополнительной информации
 
 EOF
@@ -45,49 +49,44 @@ EOF
 
 show_hello() {
   cat <<EOF
-================ Repo-Tools Launcher / v$VERSION
+======= Repo-Tools Launcher / v$LAUNCHER_VERSION
 EOF
 }
 
 
-# ==============================================================================
+# =============================
 # Определяет переменные и поведение для оформления вывода текста
-# ------------------------------------------------------------------------------
+# -----------------------------
 # Содержит переменные с escape-последовательностями.
 #
 # Если в переменных окружения пользователя задано NO_COLOR или скрипт запущен
 # с ключами -N или --no-color, то отключает использование цветного вывода.
-# Приоритет: флаг CLI > переменная окружения.
-# ==============================================================================
+# =============================
+# shellcheck disable=SC2034
 init_format() {
-  BOLD="\e[1m"
-  NO_BOLD="\e[22m"
-
-  # Логика: Если флаг цвета НЕ был явно установлен через CLI (значение 0)
-  # И в окружении присутствует переменная NO_COLOR -> отключаем цвет.
-  if [[ "${USE_COLOR_SET_BY_CLI:-0}" -eq 0 && -v NO_COLOR ]]; then
-    USE_COLOR=0
+  # Пожелание пользователя: передаётся дальше в целевой скрипт
+  if [[ -n "${NO_COLOR:-}" ]]; then
+    LAUNCHER_NO_COLOR=1
   fi
 
-  if [[ "$USE_COLOR" -eq 1 ]]; then
-    RED="\e[31m"
-    GREEN="\e[32m"
-    YELLOW="\e[33m"
-    BLUE="\e[34m"
-    CANCEL_COLOR="\e[39m"
-  else
-    RED=""
-    GREEN=""
-    YELLOW=""
-    BLUE=""
-    CANCEL_COLOR=""
+  # Локальное решение: форматировать ли вывод лаунчера (он идёт в stderr)
+  if is_no_color || [[ ! -t 2 ]] || [[ "${TERM:-}" == 'dumb' ]]; then
+    return 0
   fi
+
+  BOLD=$'\033[1m'
+  NO_BOLD=$'\033[22m'
+  RED=$'\033[31m'
+  GREEN=$'\033[32m'
+  YELLOW=$'\033[33m'
+  BLUE=$'\033[34m'
+  CANCEL_COLOR=$'\033[39m'
 }
 
 
-# ==============================================================================
+# =============================
 # Форматирование текста
-# ------------------------------------------------------------------------------
+# -----------------------------
 # Содержит набор простых функций для оформления выводимого текста:
 #   - f_bold:   жирный
 #   - f_red:    красный
@@ -96,14 +95,15 @@ init_format() {
 #   - f_blue:   синий
 #
 # Функции для вывода стилизованных информационных сообщений:
-#   - e_info:   о происходящих событиях
-#   - e_done:   об успешном выполнении действия
-#   - e_error:  об ошибке
-#   - e_debug:  информация для отладки
+#   - p_info:   о происходящих событиях
+#   - p_done:   об успешном выполнении действия
+#   - p_stop:   об отмене действия
+#   - p_error:  об ошибке
+#   - p_debug:  информация для отладки
 #
 # Пример использования:
-#   e_info "Вывод $(f_red "красного") и $(f_green "зелёного") текста"
-# ==============================================================================
+#   p_info "Вывод $(f_red "красного") и $(f_green "зелёного") текста"
+# =============================
 
 f_bold()   { _format "$BOLD"   "$NO_BOLD"      "$@"; }
 f_red()    { _format "$RED"    "$CANCEL_COLOR" "$@"; }
@@ -111,56 +111,51 @@ f_green()  { _format "$GREEN"  "$CANCEL_COLOR" "$@"; }
 f_yellow() { _format "$YELLOW" "$CANCEL_COLOR" "$@"; }
 f_blue()   { _format "$BLUE"   "$CANCEL_COLOR" "$@"; }
 
-e_info() {
-  local message=("$@")
-  local icon="●"
+_format() {
+  local start_code="$1"
+  local end_code="$2"
+  shift 2
 
-  icon=$(f_bold "$icon")
-  icon=$(f_blue "$icon")
-  printf " %s %s\n" "${icon}" "${message[*]}" >&2
+  printf '%s%s%s' "$start_code" "$*" "$end_code"
 }
 
-e_done() {
-  local message=("$@")
-  local icon="✔"
+p_info() {
+  local icon='●'
 
-  icon=$(f_bold "$icon")
-  icon=$(f_green "$icon")
-  printf " %s %s\n" "${icon}" "${message[*]}" >&2
+  icon="${BLUE}${BOLD}$icon${NO_BOLD}${CANCEL_COLOR}"
+  printf ' %s %s\n' "$icon" "$*" >&2
 }
 
-e_stop() {
-  local message=("$@")
-  local icon="✘"
+p_done() {
+  local icon='✔'
+
+  icon="${GREEN}${BOLD}$icon${NO_BOLD}${CANCEL_COLOR}"
+  printf ' %s %s\n' "$icon" "$*" >&2
+}
+
+p_stop() {
+  local icon='✘'
 
   icon=$(f_bold "$icon")
   icon=$(f_yellow "$icon")
-  printf " %s %s\n" "${icon}" "${message[*]}" >&2
+  icon="${YELLOW}${BOLD}$icon${NO_BOLD}${CANCEL_COLOR}"
+  printf ' %s %s\n' "$icon" "$*" >&2
 }
 
-e_error() {
-  local message=("$@")
-  local icon="ERROR"
+p_error() {
+  local icon='[ ERROR ]'
 
-  icon=$(f_bold "$icon")
-  icon=$(f_red "$icon")
-  printf "[ %s ] %s\n" "$icon" "${message[*]}" >&2
+  icon="${RED}${BOLD}$icon${NO_BOLD}${CANCEL_COLOR}"
+  printf '%s %s\n' "$icon" "$*" >&2
 }
 
-e_debug() {
-  local message=("$@")
-  local icon="DEBUG"
-
-  if [[ -v DEBUG ]]; then
-    icon=$(f_yellow "$icon")
-    printf "[ %s ] %s\n" "$icon" "${message[*]}" >&2
+p_debug() {
+  if ! is_debug; then
+    return 0
   fi
-}
 
-_format() {
-  local start_code=$1
-  local end_code=$2
-  shift 2
+  local icon='[ DEBUG ]'
 
-  printf "%b%s%b" "$start_code" "$*" "$end_code"
+  icon="${YELLOW}${BOLD}$icon${NO_BOLD}${CANCEL_COLOR}"
+  printf '%s %s\n' "$icon" "$*" >&2
 }

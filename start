@@ -52,12 +52,34 @@ REPO_TOOLS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_TOOLS_ROOT
 readonly SRC_DIR="$REPO_TOOLS_ROOT/scripts"
 
+# Список модулей для проверки наличия файлов перед подключением.
+# При добавлении модуля нужно обновить его и блок source ниже.
+readonly _LAUNCHER_MODULES=(
+  'ui'     # Вывод, форматирование, справка
+  'env'    # Аргументы CLI, инициализация окружения
+  'utils'  # Вспомогательные функции
+)
+
+_missing=()
+for _module in "${_LAUNCHER_MODULES[@]}"; do
+  if [[ ! -r "${SRC_DIR}/${_module}.sh" ]]; then
+    _missing+=("${SRC_DIR}/${_module}.sh")
+  fi
+done
+
+if (( ${#_missing[@]} > 0 )); then
+  printf 'Ошибка: не найдены модули:\n' >&2
+  printf '  %s\n' "${_missing[@]}" >&2
+  exit 1
+fi
+unset _module _missing
+
 # shellcheck source=scripts/ui.sh
-source "${SRC_DIR}/ui.sh" || { printf 'Ошибка: не найден ui.sh' >&2; exit 1; }
+source "${SRC_DIR}/ui.sh"
 # shellcheck source=scripts/env.sh
-source "${SRC_DIR}/env.sh" || { printf 'Ошибка: не найден env.sh' >&2; exit 1; }
+source "${SRC_DIR}/env.sh"
 # shellcheck source=scripts/utils.sh
-source "${SRC_DIR}/utils.sh" || { printf 'Ошибка: не найден utils.sh' >&2; exit 1; }
+source "${SRC_DIR}/utils.sh"
 
 
 # =============================

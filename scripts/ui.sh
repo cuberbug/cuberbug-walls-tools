@@ -3,7 +3,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly LAUNCHER_VERSION="1.0.1"
+readonly LAUNCHER_VERSION="1.0.2"
 
 BOLD='' NO_BOLD=''
 RED='' GREEN='' YELLOW='' BLUE=''
@@ -20,7 +20,7 @@ CANCEL_COLOR=''
 
 show_help() {
   cat <<EOF
-Repo-Tools Launcher — менеджер подготовки виртуального окружения для Python-утилит.
+Tools Launcher — менеджер подготовки виртуального окружения для Python-утилит.
 Версия: $LAUNCHER_VERSION
 
 Описание:
@@ -62,11 +62,13 @@ EOF
 # Если в переменных окружения пользователя задано NO_COLOR или скрипт запущен
 # с ключами -N или --no-color, то отключает использование цветного вывода.
 # =============================
-# shellcheck disable=SC2034
 init_format() {
   # Пожелание пользователя: передаётся дальше в целевой скрипт
   if [[ -n "${NO_COLOR:-}" ]]; then
     LAUNCHER_NO_COLOR=1
+    p_debug \
+      'Установлен режим no_color с отключением форматирования вывода:' \
+      "LAUNCHER_NO_COLOR=$LAUNCHER_NO_COLOR"
   fi
 
   # Локальное решение: форматировать ли вывод лаунчера (он идёт в stderr)
@@ -136,8 +138,6 @@ p_done() {
 p_stop() {
   local icon='✘'
 
-  icon=$(f_bold "$icon")
-  icon=$(f_yellow "$icon")
   icon="${YELLOW}${BOLD}$icon${NO_BOLD}${CANCEL_COLOR}"
   printf ' %s %s\n' "$icon" "$*" >&2
 }

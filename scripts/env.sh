@@ -116,14 +116,17 @@ init_env() {
 # =============================
 check_dependencies() {
   p_info "Проверка системных зависимостей..."
+
   if ! command -v git &>/dev/null; then
     p_error 'Git не найден. Пожалуйста, установите Git.'
     return 1
   fi
+
   if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
     p_error 'Python не найден. Пожалуйста, установите Python.'
     return 1
   fi
+
   p_done 'Все системные зависимости найдены.'
   return 0
 }
